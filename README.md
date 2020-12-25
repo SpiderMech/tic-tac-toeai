@@ -8,6 +8,7 @@ The Q function, which the Q-learning player (agent) bases its course of action u
 Nonetheless, this script trains the agent against a random player, then plays against you the human player.
 
 **********How to Play**********
+
 7|8|9
 4|5|6
 1|2|3
