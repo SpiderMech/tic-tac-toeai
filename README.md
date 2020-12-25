@@ -9,9 +9,9 @@ Nonetheless, this script trains the agent against a random player, then plays ag
 
 **********How to Play**********
 
-7|8|9
-4|5|6
-1|2|3
+7|8|9<br>
+4|5|6<br>
+1|2|3<br>
 
 The above are the key mappings, i.e. centre of the board is key 5
 your default symbol is cross (x)
