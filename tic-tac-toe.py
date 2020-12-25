@@ -1,248 +1,371 @@
-import numpy as np
-import math
-import matplotlib.pyplot as plt
+##### Game Environment #####
+from abc import abstractmethod
+import random
 
-LEARNING_RATE = 0.1
-DISCOUNT = 0.95
-EPISODES = 25000
+### Normal Human Game ###
+class Game:
+    def __init__(self):
+        self.board = Board()
+        self.player1 = Player('o')
+        self.player2 = Player('x')
+        self.player_lst = [self.player1, self.player2]
+        self.move_dict = {
+            7: (0, 0), 8: (0, 1), 9: (0, 2),
+            4: (1, 0), 5: (1, 1), 6: (1, 2),
+            1: (2, 0), 2: (2, 1), 3: (2, 2)
+        }
 
-SHOW_EVERY = 2000
+    def load_game(self):
+        self.board.reset_board()
 
-epsilon = 0.5
-START_EPSILON_DECAY = 1
-END_EPSILON_DECAY = EPISODES //2
+    def play_game(self):
+        turn_counter = 0
+        player_input = -1
+        game_over = False
+        while not game_over and player_input != 0:
 
-epsilon_decay_value = epsilon/(END_EPSILON_DECAY-START_EPSILON_DECAY)
+            turn = turn_counter % 2
 
+            # Get valid player input
+            player_input = int(input("Player {} please play your move: ".format(turn+1)))
+            while not self.is_valid_move(player_input):
+                player_input = int(input("INVALID MOVE, Player {} play again: ".format(turn+1)))
+
+            current_player = self.player_lst[turn]
+
+            # Set board value
+            self.board.set_board_val_by_pos(self.move_dict.get(player_input), current_player.symbol)
+            self.board.print_board()
+            print(self.board.get_board_hash())
+
+            game_over = self.is_game_over(current_player.symbol)
+
+            # Add to player history
+            current_player.move_history.append(player_input)
+            turn_counter += 1
+        print("Player {} has won the game!".format(turn_counter%2))
+
+    def is_valid_move(self, move):
+        return self.board.board.get(self.move_dict.get(move), -1) == 0
+
+    def is_game_over(self, symbol):
+        streak_count = 0
+        # Check row win
+        for x in range(self.board.column):
+            for y in range(self.board.row):
+                if self.board.get_board_val_by_pos((x,y)) == symbol:
+                    streak_count += 1
+            if streak_count == 3:
+                return True
+            else:
+                streak_count = 0
+
+        # Check column win
+        for x in range(self.board.column):
+            for y in range(self.board.row):
+                if self.board.get_board_val_by_pos((y, x)) == symbol:
+                    streak_count += 1
+            if streak_count == 3:
+                return True
+            else:
+                streak_count = 0
+
+        # Check diagonal win
+        if self.board.get_board_val_by_pos((1,1)) == symbol:
+            if self.board.get_board_val_by_pos((0,2)) == self.board.get_board_val_by_pos((2,0)) == symbol:
+                return True
+            if self.board.get_board_val_by_pos((0,0)) == self.board.get_board_val_by_pos((2,2)) == symbol:
+                return True
+
+        # Check for tie
+        for x in range(self.board.column):
+            for y in range(self.board.row):
+                if self.board.get_board_val_by_pos((y, x)) == 0:
+                    return False
+        return True
+
+### Board ###
 class Board:
     def __init__(self, row=3, column=3):
         self.row = row
         self.column = column
-        self.board = [[0 for i in range(3)] for j in range(3)]
+        self.board = {(x,y):0 for (x, y) in [(x,y) for x in range(row) for y in range(column)]}
+        self.move_dict = {
+            7: (0, 0), 8: (0, 1), 9: (0, 2),
+            4: (1, 0), 5: (1, 1), 6: (1, 2),
+            1: (2, 0), 2: (2, 1), 3: (2, 2)
+        }
 
-    def printBoard(self):
-        for x in range(self.row):
-            print()
-            for y in range(self.column):
-                print(self.board[x][y], end = '|')
+        self.index_dict = {
+            (0, 0): 7, (0, 1): 8, (0, 2): 9,
+            (1, 0): 4, (1, 1): 5, (1, 2): 6,
+            (2, 0): 1, (2, 1): 2, (2, 2): 3
+        }
+        # print(self.board)
+
+
+    def print_board(self):
+        for y in range(self.row):
+            for x in range(self.column):
+                board_val_in_pos = self.board.get((y,x), 0)
+                print(board_val_in_pos, end='')
+                if x != 2:
+                    print('|', end='')
+                else:
+                    print()
         print()
 
-    def getBoard(self):
-        return self.board
 
-    def getBoardState(self):
-        state = ((self.board[0][0], self.board[0][1], self.board[0][2]),(self.board[1][0],self.board[1][1],self.board[1][2]), (self.board[2][0],self.board[2][1],self.board[2][2]))
-        return state
-
-    def resetBoard(self):
-        self.board = [[0 for i in range(3)] for j in range(3)]
+    def reset_board(self):
+        for key in self.board.keys():
+            self.board[key] = 0
 
 
-def validMove(board, s):
-    if board[int(s.split(' ')[0])][int(s.split(' ')[1])] != 0:
-        # print("Invalid move, please pick another move")
-        return False
-    return True
+    def set_board_val_by_pos(self, pos, val):
+        self.board[pos] = val
 
 
+    def get_board_val_by_pos(self, pos):
+        return self.board.get(pos, -1)
+
+
+    def get_board_hash(self):
+        hash_lst = [val for val in self.board.values()]
+        hash_val = 0
+        for index, val in enumerate(hash_lst):
+            if type(val) == str:
+                val = ord(val)
+            hash_val += (index+1) * val
+        return hash_val
+
+
+    def is_valid_move(self, move):
+        return self.board.get(self.move_dict.get(move), -1) == 0
+
+
+    def get_random_empty_spot(self):
+        random_spot_lst = []
+        for pos, val in self.board.items():
+            if val == 0:
+                random_spot_lst.append(pos)
+        if len(random_spot_lst) == 1:
+            return self.index_dict.get(random_spot_lst[0])
+        return self.index_dict.get(random.choice(random_spot_lst))
+
+
+    def is_game_over(self, symbol):
+        streak_count = 0
+        # Check row win
+        for x in range(self.column):
+            for y in range(self.row):
+                if self.get_board_val_by_pos((x,y)) == symbol:
+                    streak_count += 1
+            if streak_count == 3:
+                return True, "win", symbol
+            else:
+                streak_count = 0
+
+        # Check column win
+        for x in range(self.column):
+            for y in range(self.row):
+                if self.get_board_val_by_pos((y, x)) == symbol:
+                    streak_count += 1
+            if streak_count == 3:
+                return True, "win", symbol
+            else:
+                streak_count = 0
+
+        # Check diagonal win
+        if self.get_board_val_by_pos((1,1)) == symbol:
+            if self.get_board_val_by_pos((0,2)) == self.get_board_val_by_pos((2,0)) == symbol:
+                return True, "win", symbol
+            if self.get_board_val_by_pos((0,0)) == self.get_board_val_by_pos((2,2)) == symbol:
+                return True, "win", symbol
+
+        # Check for tie
+        for x in range(self.column):
+            for y in range(self.row):
+                if self.get_board_val_by_pos((y, x)) == 0:
+                    return False, "going", "no one"
+        return True, "draw", ""
+
+### Player ###
 class Player:
-    def __init__(self, playerId):
-        self.playerID = playerId
+    def __init__(self, symbol):
+        self.move_history = []
+        self.symbol = symbol
 
-    def makeMove(self, board, playerId, action):
-        s = getActionString(action)
-        while not validMove(board, s):
-            action += 1
-            if action == 9:
-                action = 0
-            s = getActionString(action)
-        coordinates = [int(s.split(' ')[0]), int(s.split(' ')[1])]
-        if playerId == "0":
-            board[coordinates[0]][coordinates[1]] = 'x'
+    def start_new_game(self):
+        self.move_history = []
+
+    @abstractmethod
+    def make_move(self, board: Board):
+        pass
+    @abstractmethod
+    def update(self, result):
+        pass
+
+### Random Player ###
+## Inherits Player Class ##
+class RandomPlayer(Player):
+    def __init__(self, symbol):
+        super().__init__(symbol)
+
+    def make_move(self, board: Board):
+        move = board.get_random_empty_spot()
+        board_pos = board.move_dict[move]
+        board.set_board_val_by_pos(board_pos, self.symbol)
+        return board.is_game_over(self.symbol)
+
+    def update(self, result):
+        pass
+
+### Q-Learning player ###
+## Inherits Player Class ##
+class QPlayer(Player):
+    def __init__(self, alpha, discount, initial_q, symbol):
+        super().__init__(symbol)
+        self.alpha = alpha
+        self.discount = discount
+        self.initial_q = initial_q
+        self.q_table = {}
+
+    def get_q_values(self, board_hash_val):
+        if board_hash_val in self.q_table:
+            q = self.q_table[board_hash_val]
         else:
-            board[coordinates[0]][coordinates[1]] = 'o'
-        return action
+            q = [self.initial_q for i in range(9)]
+            self.q_table[board_hash_val] = q
+        return q
 
-    def getPlayerID(self):
-        return self.playerID
-
-
-def getActionString(action):
-    s = ""
-    if action == 0:
-        s = "0 0"
-    if action == 1:
-        s = "0 1"
-    if action == 2:
-        s = "0 2"
-    if action == 3:
-        s = "1 0"
-    if action == 4:
-        s = "1 1"
-    if action == 5:
-        s = "1 2"
-    if action == 6:
-        s = "2 0"
-    if action == 7:
-        s = "2 1"
-    if action == 8:
-        s = "2 2"
-    return s
-
-
-class Game:
-    def __init__(self):
-        self.board = Board()
-        self.player0 = Player("0")
-        self.player1 = Player("1")
-
-    def PlayGame(self, ep_reward):
-        self.board.resetBoard()
-        game_over = False
-        turn = 1
-        while not game_over:
-            reward = 0
-            current_state = self.board.getBoardState()
-
-            if np.random.random() >= epsilon:
-                action = np.argmax(q_table[self.board.getBoardState()])
+    def make_move(self, board: Board):
+        move = self.get_move(board)
+        move_count = 0
+        while not board.is_valid_move(move):
+            if move_count > 9:
+                move = board.get_random_empty_spot()
             else:
-                action = np.random.randint(0, 9)
+                move = self.get_move(board)
+            move_count += 1
+        board_pos = board.move_dict.get(move)
+        board.set_board_val_by_pos(board_pos, self.symbol)
+        self.move_history.append((board.get_board_hash(), move))
+        return board.is_game_over(self.symbol)
 
-            if turn:
-                action = self.player0.makeMove(self.board.getBoard(), self.player0.getPlayerID(), action)
-                turn -= 1
-                game_over = self.isWon('x')
-                if game_over:
-                    reward = 1
-                if self.isTie():
-                    reward = 0.5
-                    game_over = True
-                ep_reward += reward
+    def get_move(self, board: Board):
+        board_hash = board.get_board_hash()
+        return argmax(self.get_q_values(board_hash))
+
+    def update(self, result):
+        reward = 0
+        if result == self.symbol+"win":
+            reward = 1
+        elif result == "draw":
+            reward = 0.5
+
+        self.move_history.reverse()
+        new_max_q = -1.0
+        for previous_move in self.move_history:
+            q_values = self.get_q_values(previous_move[0])
+            if new_max_q < 0:
+                q_values[previous_move[1]-1] = reward
             else:
-                action = self.player1.makeMove(self.board.getBoard(), self.player1.getPlayerID(), action)
-                turn += 1
-                game_over = self.isWon('o')
-                if game_over:
-                    reward = -1
-                if self.isTie():
-                    reward = 0.5
-                    game_over = True
-            new_state = self.board.getBoardState()
+                q_values[previous_move[1]-1] = q_values[previous_move[1]-1] * (1 - self.alpha) + self.alpha * self.discount * new_max_q
+            new_max_q = max(q_values)
 
-            if not game_over and not turn:
-                max_future_q = np.max(q_table[new_state])
-                current_q = q_table[current_state][action]
-                new_q = (1 - LEARNING_RATE) * current_q + LEARNING_RATE * (reward + DISCOUNT * max_future_q)
-                q_table[current_state][action] = new_q
-            else:
-                q_table[current_state][action] = 0
-        return ep_reward
 
-    def playHumanGame(self):
-        self.board.resetBoard()
-        game_over = False
-        turn = 1
-        while not game_over:
-            if turn:
-                action = np.argmax(q_table[self.board.getBoardState()])
-                print(q_table[self.board.getBoardState()])
-                self.player0.makeMove(self.board.getBoard(), self.player0.getPlayerID(), action)
-                turn -= 1
-                game_over = self.isWon('x')
-            else:
-                print("your move: ", end = '')
-                s = int(input())
-                self.player1.makeMove(self.board.getBoard(), self.player1.getPlayerID(), s)
-                turn += 1
-                game_over = self.isWon('o')
-            if self.isTie():
-                game_over = True
-            self.board.printBoard()
-        print("win")
+class HumanPlayer(Player):
+    def __init__(self, symbol):
+        super().__init__(symbol)
 
-    def isWon(self, symbol):
-        current_board = self.board.getBoard()
-        corners = [[0,0], [0,2], [2,0], [2,2]]
-        mids = [[0,1], [1,2], [2,1], [1,1]]
-        if current_board[1][1] == symbol:
-            for i, corner in enumerate(corners):
-                if current_board[corner[0]][corner[1]] == symbol:
-                    k = i*-1 + 3
-                    if current_board[corners[k][0]][corners[k][1]] == symbol:
-                        return True
-            if current_board[1][0] == symbol and current_board[1][2] == symbol:
-                return True
-            if current_board[0][1] == symbol and current_board[2][1] == symbol:
-                return True
+    def make_move(self, board: Board):
+        move = int(input('Please play your move: '))
+        while not board.is_valid_move(move) or move == '':
+            move = int(input('Invalid move, please pick again: '))
+        board_pos = board.move_dict.get(move)
+        board.set_board_val_by_pos(board_pos, self.symbol)
+        self.move_history.append((board.get_board_hash(), move))
+        return board.is_game_over(self.symbol)
+
+    def update(self, result):
+        pass
+
+
+# argmax helper function
+import math
+def argmax(lst) -> int:
+    max_dict = {}
+    max_val = -math.inf
+    for index, val in enumerate(lst):
+        if val > max_val:
+            max_val = val
+        if val not in max_dict:
+            max_dict[val] = [(index, val)]
         else:
-            for j, mid in enumerate(mids):
-                if current_board[mid[0]][mid[1]] == symbol:
-                    if j == 0 or j == 2:
-                        if current_board[mid[0]][mid[1]-1] == symbol and current_board[mid[0]][mid[1]+1] == symbol:
-                            return True
-                    elif j == 1 or j == 3:
-                        if current_board[mid[0]-1][mid[1]] == symbol and current_board[mid[0]+1][mid[1]] == symbol:
-                            return True
-        return False
-
-    def isTie(self):
-        current_board = self.board.getBoard()
-        for x in current_board:
-            for y in x:
-                if y == 0:
-                    return False
-        return True
+            max_dict[val].append((index, val))
+    max_lst = max_dict[max_val]
+    if len(max_lst) > 1:
+        index_lst = [item[0] for item in max_lst]
+        return random.choice(index_lst)
+    return max_lst[0][0]
 
 
-DISCRETE_OS_SIZE = math.factorial(9)
+# Utility function to play the game
+def play_game(board: Board, player_1: Player, player_2: Player):
+    board.reset_board()
+    board.print_board()
+    player_1.start_new_game()
+    player_2.start_new_game()
 
-import itertools
-symbols = ['o', 'x', 0]
-layouts = [[i[0:3], i[3:6], i[6:9]] for i in itertools.product(symbols, repeat=3^9)]
-q_table = {}
-for layout in layouts:
-    q_table[(layout[0], layout[1], layout[2])] = [np.random.uniform(low=0, high=2) for i in range(9)]
+    result = ""
+    winner = ""
+    game_over = False
 
-game = Game()
-
-ep_rewards = []
-aggr_ep_rewards = {'ep' : [], 'avg' : [], 'min' : [], 'max' : []}
-
-for episode in range(EPISODES):
-    episode_reward = 0
-    episode_reward = game.PlayGame(episode_reward)
-    print(f"episode reward: {episode_reward}")
-    if episode % SHOW_EVERY == 0:
-        print("winning state: {}".format(game.board.printBoard()))
-
-    if END_EPSILON_DECAY >= episode >= START_EPSILON_DECAY:
-        epsilon -= epsilon_decay_value
-    ep_rewards.append(episode_reward)
-    if not episode % SHOW_EVERY:
-        average_reward = sum(ep_rewards[-SHOW_EVERY:])/len(ep_rewards[-SHOW_EVERY:])
-        aggr_ep_rewards['ep'].append(episode)
-        aggr_ep_rewards['avg'].append(average_reward)
-        aggr_ep_rewards['min'].append(min(ep_rewards[-SHOW_EVERY:]))
-        aggr_ep_rewards['max'].append(max(ep_rewards[-SHOW_EVERY:]))
-
-        print(f"Episode:{episode}, Average:{average_reward}, Min:{min(ep_rewards[-SHOW_EVERY:])}, Max:{max(ep_rewards[-SHOW_EVERY:])}")
-
-plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['avg'], label='avg')
-plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['min'], label='min')
-plt.plot(aggr_ep_rewards['ep'], aggr_ep_rewards['max'], label='max')
-plt.legend(loc=4)
-plt.show()
-
-ROUNDS = 10
-for round in range(ROUNDS):
-    game.playHumanGame()
+    while not game_over:
+        game_over, result, winner = player_1.make_move(board)
+        board.print_board()
+        if not game_over:
+            game_over, result, winner = player_2.make_move(board)
+            board.print_board()
+    player_1.update(winner+result)
+    player_2.update(winner+result)
+    return winner + " " + result
 
 
 
+board_1 = Board()
+
+randomPlayer = RandomPlayer('x')
+q_learning_player = QPlayer(alpha=0.9, discount=0.95, initial_q=0.6, symbol='o')
+
+win_by_q = 0
+win_by_other = 0
+draw_game = 0
+
+EPISODES = 500
+
+# Train against random player
+for i in range(EPISODES):
+    game_result = play_game(board_1, q_learning_player, randomPlayer)
+    winner_of_game = game_result[0]
+    if winner_of_game == 'o':
+        win_by_q += 1
+    elif winner_of_game == 'x':
+        win_by_other += 1
+    else:
+        draw_game += 1
+    print("{} won this game".format(winner_of_game))
 
 
+print(q_learning_player.q_table)
+print("Q learner won {} games out of {}".format(win_by_q, EPISODES))
+print("Other player won {} games out of {}".format(win_by_other, EPISODES))
+print("Drew {} games", draw_game)
 
-
-
-
+# Train against human player
+humanPlayer = HumanPlayer('x')
+for i in range(EPISODES):
+    print("game {}".format(i+1))
+    game_result = play_game(board_1, humanPlayer, q_learning_player)
+    winner_of_game = game_result[0]
+    print("{} won this game".format(winner_of_game))
