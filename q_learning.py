@@ -35,7 +35,7 @@ class Game:
 
             # Set board value
             self.board.set_board_val_by_pos(self.move_dict.get(player_input), current_player.symbol)
-            self.board.print_board()
+            # self.board.print_board()
             print(self.board.get_board_hash())
 
             game_over = self.is_game_over(current_player.symbol)
@@ -202,7 +202,7 @@ class Player:
     def make_move(self, board: Board):
         pass
     @abstractmethod
-    def update(self, result):
+    def update(self, result, board):
         pass
 
 ### Random Player ###
@@ -217,7 +217,7 @@ class RandomPlayer(Player):
         board.set_board_val_by_pos(board_pos, self.symbol)
         return board.is_game_over(self.symbol)
 
-    def update(self, result):
+    def update(self, result, board):
         pass
 
 ### Q-Learning player ###
@@ -239,24 +239,21 @@ class QPlayer(Player):
         return q
 
     def make_move(self, board: Board):
+        board_hash = board.get_board_hash()
         move = self.get_move(board)
-        move_count = 0
         while not board.is_valid_move(move):
-            if move_count > 9:
-                move = board.get_random_empty_spot()
-            else:
-                move = self.get_move(board)
-            move_count += 1
+            move = board.get_random_empty_spot()
+
         board_pos = board.move_dict.get(move)
         board.set_board_val_by_pos(board_pos, self.symbol)
-        self.move_history.append((board.get_board_hash(), move))
+        self.move_history.append((board_hash, move))
         return board.is_game_over(self.symbol)
 
     def get_move(self, board: Board):
         board_hash = board.get_board_hash()
-        return argmax(self.get_q_values(board_hash))
+        return argmax(self.get_q_values(board_hash)) + 1
 
-    def update(self, result):
+    def update(self, result, board):
         reward = 0
         if result == self.symbol+"win":
             reward = 1
@@ -287,7 +284,7 @@ class HumanPlayer(Player):
         self.move_history.append((board.get_board_hash(), move))
         return board.is_game_over(self.symbol)
 
-    def update(self, result):
+    def update(self, result, board):
         pass
 
 
@@ -310,10 +307,25 @@ def argmax(lst) -> int:
     return max_lst[0][0]
 
 
+# Helper function to print board directives
+def print_instructions():
+    print("Board Key Mappings")
+    lst = [7, 4, 1]
+    for s in lst:
+        for num in range(3):
+            if num == 0:
+                print(s, end='|')
+            elif num == 1:
+                print(s+1, end='|')
+            else:
+                print(s+2)
+    print()
+
+
 # Utility function to play the game
 def play_game(board: Board, player_1: Player, player_2: Player):
     board.reset_board()
-    board.print_board()
+
     player_1.start_new_game()
     player_2.start_new_game()
 
@@ -323,49 +335,93 @@ def play_game(board: Board, player_1: Player, player_2: Player):
 
     while not game_over:
         game_over, result, winner = player_1.make_move(board)
-        board.print_board()
         if not game_over:
             game_over, result, winner = player_2.make_move(board)
-            board.print_board()
-    player_1.update(winner+result)
-    player_2.update(winner+result)
+    player_1.update(winner+result, board)
+    player_2.update(winner+result, board)
     return winner + " " + result
+
+
+def play_human_game(board: Board, player_1: Player, player_2: Player):
+    board.reset_board()
+    print('Starting board')
+    board.print_board()
+    player_1.start_new_game()
+    player_2.start_new_game()
+
+    result = ""
+    winner = ""
+    game_over = False
+
+    while not game_over:
+        print("{}'s move".format(player_1.symbol))
+        game_over, result, winner = player_1.make_move(board)
+        board.print_board()
+        if not game_over:
+            print("{}'s move".format(player_2.symbol))
+            game_over, result, winner = player_2.make_move(board)
+            board.print_board()
+    player_1.update(winner+result, board)
+    player_2.update(winner+result, board)
+    return winner + " " + result
+
 
 
 
 board_1 = Board()
 
 randomPlayer = RandomPlayer('x')
-q_learning_player = QPlayer(alpha=0.9, discount=0.95, initial_q=0.6, symbol='o')
+q_learning_player1 = QPlayer(alpha=0.9, discount=0.95, initial_q=0.6, symbol='o')
+q_player_2 = QPlayer(alpha=0.9, discount=0.95, initial_q=0.6, symbol='x')
 
-win_by_q = 0
-win_by_other = 0
-draw_game = 0
+q_r_win = 0
+q_r_draw = 0
 
-EPISODES = 500
+EPISODES = 10000
+
+# Train against another q player
+for i in range(EPISODES):
+    game_result = play_game(board_1, q_learning_player1, randomPlayer)
+    winner_of_game = game_result[0]
+    if winner_of_game == 'o':
+        q_r_win += 1
+    elif winner_of_game != 'x':
+        q_r_draw += 1
+
+q_q_win = 0
+q_q_draw = 0
 
 # Train against random player
 for i in range(EPISODES):
-    game_result = play_game(board_1, q_learning_player, randomPlayer)
+    game_result = play_game(board_1, q_learning_player1, q_player_2)
     winner_of_game = game_result[0]
     if winner_of_game == 'o':
-        win_by_q += 1
-    elif winner_of_game == 'x':
-        win_by_other += 1
-    else:
-        draw_game += 1
-    print("{} won this game".format(winner_of_game))
+        q_q_win += 1
+    elif winner_of_game != 'x':
+        q_q_draw += 1
 
+from tabulate import tabulate
+print(tabulate([['Random player', q_r_win, q_r_draw, EPISODES - (q_r_draw + q_r_win)], ['Q player', q_q_win, q_q_draw, EPISODES - (q_q_draw + q_q_win)]], headers=['Against', 'win', 'draw', 'lose']))
+print()
 
-print(q_learning_player.q_table)
-print("Q learner won {} games out of {}".format(win_by_q, EPISODES))
-print("Other player won {} games out of {}".format(win_by_other, EPISODES))
-print("Drew {} games", draw_game)
+q_h_win = 0
+q_h_draw = 0
 
-# Train against human player
+GAMES = 20
+# Against human player
 humanPlayer = HumanPlayer('x')
-for i in range(EPISODES):
-    print("game {}".format(i+1))
-    game_result = play_game(board_1, humanPlayer, q_learning_player)
+print_instructions()
+print("NOW PLAYING AGAINST Q PLAYER 2")
+for i in range(GAMES):
+    print("ROUND {}".format(i+1))
+    game_result = play_human_game(board_1, q_learning_player1, humanPlayer)
     winner_of_game = game_result[0]
+    if winner_of_game == 'x':
+        q_h_win += 1
+    elif winner_of_game != 'o':
+        q_h_draw += 1
+        winner_of_game = "No one"
+
+
     print("{} won this game".format(winner_of_game))
+print(tabulate([['Human', q_h_win, q_h_draw, GAMES - (q_h_win + q_h_draw)]], headers=['Against', 'win', 'draw', 'lose']))
