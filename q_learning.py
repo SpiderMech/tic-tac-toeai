@@ -108,7 +108,10 @@ class Board:
         for y in range(self.row):
             for x in range(self.column):
                 board_val_in_pos = self.board.get((y,x), 0)
-                print(board_val_in_pos, end='')
+                if board_val_in_pos == 'o':
+                    print(f"\033[91m{board_val_in_pos}\033[0m", end='')
+                else:
+                    print(board_val_in_pos, end='')
                 if x != 2:
                     print('|', end='')
                 else:
@@ -137,6 +140,14 @@ class Board:
                 val = ord(val)
             hash_val += (index+1) * val
         return hash_val
+
+    def get_board_string(self):
+        res = ""
+        for val in self.board.values():
+            if val == 0:
+                val = str(val)
+            res += val
+        return res
 
 
     def is_valid_move(self, move):
@@ -230,28 +241,36 @@ class QPlayer(Player):
         self.initial_q = initial_q
         self.q_table = {}
 
-    def get_q_values(self, board_hash_val):
-        if board_hash_val in self.q_table:
-            q = self.q_table[board_hash_val]
+    # def get_q_values(self, board_hash_val):
+    #     if board_hash_val in self.q_table:
+    #         q = self.q_table[board_hash_val]
+    #     else:
+    #         q = [self.initial_q for i in range(9)]
+    #         self.q_table[board_hash_val] = q
+    #     return q
+
+    def get_q_values(self, board_string):
+        if board_string in self.q_table:
+            q = self.q_table[board_string]
         else:
             q = [self.initial_q for i in range(9)]
-            self.q_table[board_hash_val] = q
+            self.q_table[board_string] = q
         return q
 
     def make_move(self, board: Board):
-        board_hash = board.get_board_hash()
+        board_string = board.get_board_string()
         move = self.get_move(board)
         while not board.is_valid_move(move):
             move = board.get_random_empty_spot()
 
         board_pos = board.move_dict.get(move)
         board.set_board_val_by_pos(board_pos, self.symbol)
-        self.move_history.append((board_hash, move))
+        self.move_history.append((board_string, move))
         return board.is_game_over(self.symbol)
 
     def get_move(self, board: Board):
-        board_hash = board.get_board_hash()
-        return argmax(self.get_q_values(board_hash)) + 1
+        board_string = board.get_board_string()
+        return argmax(self.get_q_values(board_string)) + 1
 
     def update(self, result, board):
         reward = 0
@@ -281,7 +300,7 @@ class HumanPlayer(Player):
             move = int(input('Invalid move, please pick again: '))
         board_pos = board.move_dict.get(move)
         board.set_board_val_by_pos(board_pos, self.symbol)
-        self.move_history.append((board.get_board_hash(), move))
+        self.move_history.append((board.get_board_string(), move))
         return board.is_game_over(self.symbol)
 
     def update(self, result, board):
@@ -401,8 +420,11 @@ for i in range(EPISODES):
         q_q_draw += 1
 
 from tabulate import tabulate
+print("Q Learner results")
 print(tabulate([['Random player', q_r_win, q_r_draw, EPISODES - (q_r_draw + q_r_win)], ['Q player', q_q_win, q_q_draw, EPISODES - (q_q_draw + q_q_win)]], headers=['Against', 'win', 'draw', 'lose']))
 print()
+
+print(len(q_learning_player1.q_table))
 
 q_h_win = 0
 q_h_draw = 0
@@ -416,12 +438,12 @@ for i in range(GAMES):
     print("ROUND {}".format(i+1))
     game_result = play_human_game(board_1, q_learning_player1, humanPlayer)
     winner_of_game = game_result[0]
-    if winner_of_game == 'x':
+    if winner_of_game == 'o':
         q_h_win += 1
-    elif winner_of_game != 'o':
+    elif winner_of_game != 'x':
         q_h_draw += 1
         winner_of_game = "No one"
 
 
-    print("{} won this game".format(winner_of_game))
+    print("{} won this game!\n".format(winner_of_game))
 print(tabulate([['Human', q_h_win, q_h_draw, GAMES - (q_h_win + q_h_draw)]], headers=['Against', 'win', 'draw', 'lose']))
