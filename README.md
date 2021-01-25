@@ -15,5 +15,3 @@ Nonetheless, this script trains the agent against a random player, then plays ag
 
 The above are the key mappings, i.e. centre of the board is key 5
 your default symbol is cross (x)
-
-Remeber that the agent is only as good as the player trains against, so for the q agent to be as good as you, you have to play many many games with it, sounds pretty useless right now? Yeah it is... so stay tuned for more sophisticated agents
